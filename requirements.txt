@@ -1,0 +1,7 @@
+pandas
+faker
+sqlalchemy
+python-dotenv
+scikit-learn
+joblib
+ollama
