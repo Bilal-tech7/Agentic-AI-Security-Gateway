@@ -377,7 +377,69 @@ def create_claim_assignments(
 
     session.commit()
 
+def ensure_database_initialized():
+    """
+    Initialize and seed the demo database only when needed.
 
+    Existing populated databases are left unchanged.
+    """
+
+    # Create database tables if they do not exist.
+    Base.metadata.create_all(bind=engine)
+
+    session = SessionLocal()
+
+    try:
+
+        # Check whether the database already contains claims.
+        existing_claim = session.query(Claim).first()
+
+        # Database is already populated, so do nothing.
+        if existing_claim is not None:
+            return
+
+        # Database is empty, so create the demo data.
+        customers = create_customers(
+            session,
+            number=50
+        )
+
+        policies = create_policies(
+            session,
+            customers
+        )
+
+        claims = create_claims(
+            session,
+            customers,
+            policies
+        )
+
+        create_documents(
+            session,
+            claims
+        )
+
+        create_adversarial_documents(
+            session
+        )
+
+        users = create_users(
+            session
+        )
+
+        create_claim_assignments(
+            session,
+            claims,
+            users
+        )
+
+        print(
+            "Aurelia demo database initialized."
+        )
+
+    finally:
+        session.close()
 
 def main():
 

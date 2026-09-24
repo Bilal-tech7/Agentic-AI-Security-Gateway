@@ -17,7 +17,7 @@ import streamlit as st
 import json
 import os
 
-
+from src.seed_data import ensure_database_initialized
 from src.database import SessionLocal
 from src.models import Claim
 
@@ -35,6 +35,8 @@ from src.ollama_agent import (
     DEFAULT_MODEL,
 )
 
+# Ensure the demo database exists before the UI queries it.
+ensure_database_initialized()
 
 # ============================================================
 # PAGE CONFIGURATION
