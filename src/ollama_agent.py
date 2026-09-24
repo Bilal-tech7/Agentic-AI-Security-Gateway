@@ -466,6 +466,81 @@ def parse_tool_request(
     }
 
 
+
+# ============================================================
+# CLOUD / DEMO INTERPRETER
+# ============================================================
+
+def _extract_explicit_id(prompt):
+    """Return the first integer explicitly supplied by the user."""
+    match = re.search(r"\b(\d+)\b", prompt)
+    return int(match.group(1)) if match else None
+
+
+def interpret_demo_request(prompt):
+    """
+    Cloud-safe deterministic interpreter.
+
+    It only proposes tool requests. Authorization and protected
+    execution still happen through execute_agent_action().
+    """
+    text = prompt.strip()
+    lower = text.lower()
+    explicit_id = _extract_explicit_id(text)
+
+    if not text:
+        return {"type": "MESSAGE", "model_response": "Please ask me about a claim, customer, policy, or settlement action."}
+
+    if explicit_id is None:
+        if any(word in lower for word in ("hello", "hi", "hey")):
+            return {
+                "type": "MESSAGE",
+                "model_response": (
+                    "Hello. I'm Aurelia. This public demo can interpret common "
+                    "claims requests and route proposed actions through the same "
+                    "Aurelia security gateway."
+                ),
+            }
+        return {
+            "type": "MESSAGE",
+            "model_response": (
+                'Public demo mode supports requests such as "Show me claim 1", '
+                '"What documents are available for claim 1?", '
+                '"Show me the history for claim 1", and '
+                '"Approve the settlement for claim 19".'
+            ),
+        }
+
+    if any(word in lower for word in ("approve", "authorize", "authorise", "accept", "confirm")):
+        tool_name, arguments = "approve_settlement", {"claim_id": explicit_id}
+    elif any(word in lower for word in ("document", "file", "attachment", "evidence")):
+        tool_name, arguments = "get_claim_documents", {"claim_id": explicit_id}
+    elif any(word in lower for word in ("history", "timeline", "previous")):
+        tool_name, arguments = "get_claim_history", {"claim_id": explicit_id}
+    elif "customer" in lower:
+        tool_name, arguments = "get_customer", {"customer_id": explicit_id}
+    elif "policy" in lower:
+        tool_name, arguments = "get_policy", {"policy_id": explicit_id}
+    elif "claim" in lower:
+        tool_name, arguments = "get_claim", {"claim_id": explicit_id}
+    else:
+        return {
+            "type": "MESSAGE",
+            "model_response": (
+                "I couldn't map that request to a supported demo action. "
+                "Please mention a claim, customer, policy, documents, history, "
+                "or settlement approval."
+            ),
+        }
+
+    proposal = {"tool_name": tool_name, "arguments": arguments}
+    return {
+        "type": "TOOL_REQUEST",
+        "model_response": json.dumps(proposal),
+        "proposed_tool": proposal,
+    }
+
+
 # ============================================================
 # AGENT
 # ============================================================
@@ -518,20 +593,35 @@ def run_agent(
     # 1. Ask the LLM to interpret the user's request.
     # --------------------------------------------------------
 
-    model_response = ask_ollama(
-        prompt,
-        model=model,
-    )
+    interpreter_mode = "LOCAL_OLLAMA"
 
-    # --------------------------------------------------------
-    # 2. Determine whether the LLM proposed a tool.
-    # --------------------------------------------------------
-
-    tool_request = (
-        parse_tool_request(
-            model_response
+    try:
+        model_response = ask_ollama(
+            prompt,
+            model=model,
         )
-    )
+        tool_request = parse_tool_request(model_response)
+
+    except Exception:
+        # Hosted Streamlit cannot reach Ollama running on the developer's PC.
+        # Only interpretation falls back; the security boundary is unchanged.
+        interpreter_mode = "PUBLIC_DEMO"
+        demo = interpret_demo_request(prompt)
+
+        if demo["type"] == "MESSAGE":
+            return {
+                "success": True,
+                "type": "MESSAGE",
+                "model_response": demo["model_response"],
+                "interpreter_mode": interpreter_mode,
+            }
+
+        model_response = demo["model_response"]
+        tool_request = demo["proposed_tool"]
+
+    # --------------------------------------------------------
+    # 2. Determine whether the interpreter proposed a tool.
+    # --------------------------------------------------------
 
     # --------------------------------------------------------
     # 3. Normal conversation.
@@ -545,6 +635,7 @@ def run_agent(
             "model_response": (
                 model_response
             ),
+            "interpreter_mode": interpreter_mode,
         }
 
     # --------------------------------------------------------
@@ -604,4 +695,5 @@ def run_agent(
         "security_result": (
             security_result
         ),
+        "interpreter_mode": interpreter_mode,
     }

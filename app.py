@@ -484,8 +484,14 @@ elif page == "AI Agent":
     )
 
     st.caption(
-        "Local LLM reasoning protected by the "
+        "Natural-language requests protected by the "
         "Aurelia Hybrid Security Gateway."
+    )
+
+    st.info(
+        "Deployment-aware agent: local deployments use Ollama when available; "
+        "hosted deployments fall back to a deterministic demo interpreter. "
+        "Both modes use the same security gateway for authorization."
     )
 
     approval_flash = st.session_state.pop("approval_flash", None)
@@ -636,9 +642,7 @@ elif page == "AI Agent":
                 except Exception as error:
 
                     st.error(
-                        "Unable to contact the "
-                        "local Aurelia/Ollama "
-                        "agent."
+                        "Aurelia could not process this request."
                     )
 
                     st.code(
@@ -652,6 +656,16 @@ elif page == "AI Agent":
             # =================================================
 
             if result is not None:
+
+                interpreter_mode = result.get("interpreter_mode", "UNKNOWN")
+
+                if interpreter_mode == "PUBLIC_DEMO":
+                    st.caption(
+                        "Interpreter: PUBLIC DEMO — deterministic request mapping; "
+                        "security authorization remains fully enforced."
+                    )
+                elif interpreter_mode == "LOCAL_OLLAMA":
+                    st.caption(f"Interpreter: LOCAL OLLAMA — {DEFAULT_MODEL}")
 
                 if (
                     result["type"]
