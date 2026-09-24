@@ -1,4 +1,9 @@
 **# Aurelia — Secure Agentic AI Gateway**
+## 🚀 Live Demo
+
+Try the live Aurelia AI Claims Agent:
+
+👉 [Launch Aurelia Live Demo](https://agentic-ai-security-gateway.streamlit.app/)
 
 **## Overview**
 
